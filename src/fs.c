@@ -27,11 +27,31 @@ void    fs_debug(Disk *disk) {
     }
 
     printf("SuperBlock:\n");
+    if (block.super->magic_number == MAGIC_NUMBER)
+        printf("    magic number is valud");
+    else
+        printf("    magic number is not valid");
     printf("    %u blocks\n"         , block.super.blocks);
     printf("    %u inode blocks\n"   , block.super.inode_blocks);
     printf("    %u inodes\n"         , block.super.inodes);
 
     /* Read Inodes */
+    for (uint32_t i = 0; i < INODES_PER_BLOCK; i++){
+        if (inodes[i].valid == 0){
+            printf("Inode %u:\n", i);
+            printf("    size: %u bytes\n", inodes[i].size);
+            char buffer[BUFSIZ];
+            for (uint32_t j = 0; j < POINTERS_PER_INODE; j++){
+
+            }
+        }
+    }
+
+    // Print total disk block reads and writes
+    // disk->blocks, disk->reads, and disk->writes are important here
+    // disk->fd is also thing but probs not as important 
+    printf("%u disk block reads\n", disk.reads);
+    printf("%u disk block writes\n", disk.writes);
 }
 
 /**
