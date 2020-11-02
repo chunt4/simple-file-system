@@ -20,15 +20,15 @@
  **/
 void    fs_debug(Disk *disk) {
     Block block;
-
+    printf("no");
     /* Read SuperBlock */
     if (disk_read(disk, 0, block.data) == DISK_FAILURE) {
         return;
     }
 
     printf("SuperBlock:\n");
-    if (block.super->magic_number == MAGIC_NUMBER)
-        printf("    magic number is valud");
+    if (block.super.magic_number == MAGIC_NUMBER)
+        printf("    magic number is valid");
     else
         printf("    magic number is not valid");
     printf("    %u blocks\n"         , block.super.blocks);
@@ -37,21 +37,24 @@ void    fs_debug(Disk *disk) {
 
     /* Read Inodes */
     for (uint32_t i = 0; i < INODES_PER_BLOCK; i++){
-        if (inodes[i].valid == 0){
+        if (block.inodes[i].valid == 1){
             printf("Inode %u:\n", i);
-            printf("    size: %u bytes\n", inodes[i].size);
+            printf("    size: %u bytes\n", block.inodes[i].size);
             char buffer[BUFSIZ];
             for (uint32_t j = 0; j < POINTERS_PER_INODE; j++){
-
+                sprintf(buffer, "%s %u", buffer, block.inodes[i].direct[j]);
             }
+            printf("    direct blocks: %s\n", buffer);
+            printf("    indirect block: %u\n", block.inodes[i].indirect);
+            // Use indirect block number to disk read to get the indirect block, which is an array of pointers so you can iterate through it
         }
     }
 
     // Print total disk block reads and writes
     // disk->blocks, disk->reads, and disk->writes are important here
     // disk->fd is also thing but probs not as important 
-    printf("%u disk block reads\n", disk.reads);
-    printf("%u disk block writes\n", disk.writes);
+    printf("%zu disk block reads\n", disk->reads);
+    printf("%zu disk block writes\n", disk->writes);
 }
 
 /**
