@@ -30,6 +30,13 @@ bool    disk_sanity_check(Disk *disk, size_t blocknum, const char *data);
  *              on failure).
  **/
 Disk *	disk_open(const char *path, size_t blocks) {
+    Disk * new_disk = malloc(sizeof(int)+(3*sizeof(size_t)));
+    int fd = open(path, RD_ONLY);
+    if(fd<0){
+        truncate(path, blocks*BLOCK_SIZE);
+    }
+    //open
+    //if not open truncate
     return NULL;
 }
 
@@ -45,6 +52,10 @@ Disk *	disk_open(const char *path, size_t blocks) {
  * @param       disk        Pointer to Disk structure.
  */
 void	disk_close(Disk *disk) {
+    close(disk->fd);
+    printf("The total number of disk reads is %zu", disk->reads);
+    printf("The total number of disk writes is %zu", disk->writes);
+    free(disk);
 }
 
 /**
@@ -65,6 +76,10 @@ void	disk_close(Disk *disk) {
  *              (BLOCK_SIZE on success, DISK_FAILURE on failure).
  **/
 ssize_t disk_read(Disk *disk, size_t block, char *data) {
+    if (disk_sanity_check(disk, block, data)){
+        
+
+    }
     return DISK_FAILURE;
 }
 
@@ -86,6 +101,11 @@ ssize_t disk_read(Disk *disk, size_t block, char *data) {
  *              (BLOCK_SIZE on success, DISK_FAILURE on failure).
  **/
 ssize_t disk_write(Disk *disk, size_t block, char *data) {
+    if (disk_sanity_check(disk, block, data)){
+        
+
+    }
+
     return DISK_FAILURE;
 }
 
@@ -108,7 +128,13 @@ ssize_t disk_write(Disk *disk, size_t block, char *data) {
  *              (true for safe, false for unsafe).
  **/
 bool    disk_sanity_check(Disk *disk, size_t block, const char *data) {
-    return false;
+    if (disk->fd<0){
+        return false;
+    }
+    if (block
+
+    if data==
+    return true;
 }
 
 /* vim: set expandtab sts=4 sw=4 ts=8 ft=c: */
