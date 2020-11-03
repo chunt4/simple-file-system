@@ -5,6 +5,7 @@
 
 #include <fcntl.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 /* Internal Prototyes */
 
@@ -30,14 +31,31 @@ bool    disk_sanity_check(Disk *disk, size_t blocknum, const char *data);
  *              on failure).
  **/
 Disk *	disk_open(const char *path, size_t blocks) {
-    Disk * new_disk = malloc(sizeof(int)+(3*sizeof(size_t)));
-    int fd = open(path, RD_ONLY);
+    //disk_open complete and correct (I think)
+    Disk * new_disk = malloc(sizeof(Disk));
+    int fd = open(path, O_RDWR | O_CREAT, 0644);
+    printf("\n\nFile descriptor: %i\n\n", fd);
     if(fd<0){
-        truncate(path, blocks*BLOCK_SIZE);
+        printf("THIS IS THE BAD FILE POLICE REROOREROO");
+        if (!truncate(path, blocks*BLOCK_SIZE)){
+            free(new_disk);
+            return NULL;
+        }
+        fd = open(path, O_RDONLY);
+        if(fd<0){
+            free(new_disk);
+            return NULL;
+        }
     }
-    //open
-    //if not open truncate
-    return NULL;
+    if(blocks>BLOCK_SIZE){
+        free(new_disk);
+        return NULL;
+    }
+    new_disk->fd = fd;
+    new_disk->reads = 0;
+    new_disk->writes = 0;
+    new_disk->blocks = blocks;
+    return new_disk;
 }
 
 /**
@@ -52,9 +70,10 @@ Disk *	disk_open(const char *path, size_t blocks) {
  * @param       disk        Pointer to Disk structure.
  */
 void	disk_close(Disk *disk) {
+    //complete and correct (I think)
     close(disk->fd);
-    printf("The total number of disk reads is %zu", disk->reads);
-    printf("The total number of disk writes is %zu", disk->writes);
+    printf("The total number of disk reads is %zu\n", disk->reads);
+    printf("The total number of disk writes is %zu\n", disk->writes);
     free(disk);
 }
 
@@ -76,9 +95,13 @@ void	disk_close(Disk *disk) {
  *              (BLOCK_SIZE on success, DISK_FAILURE on failure).
  **/
 ssize_t disk_read(Disk *disk, size_t block, char *data) {
+    // incorrect
     if (disk_sanity_check(disk, block, data)){
-        
-
+        block = lseek(disk->fd, block, data);
+        ssize_t numBytes = read(disk->fd, data, block);
+        if (numBytes == BLOCK_SIZE){
+            return BLOCK_SIZE;
+        }
     }
     return DISK_FAILURE;
 }
@@ -101,12 +124,16 @@ ssize_t disk_read(Disk *disk, size_t block, char *data) {
  *              (BLOCK_SIZE on success, DISK_FAILURE on failure).
  **/
 ssize_t disk_write(Disk *disk, size_t block, char *data) {
+    //incorrect
     if (disk_sanity_check(disk, block, data)){
-        
-
+        block = lseek(disk->fd, block, data);
+        ssize_t numBytes = write(disk->fd, data, block);
+        if (numBytes == BLOCK_SIZE){
+            return BLOCK_SIZE;
+        }
     }
-
     return DISK_FAILURE;
+
 }
 
 /* Internal Functions */
@@ -128,12 +155,22 @@ ssize_t disk_write(Disk *disk, size_t block, char *data) {
  *              (true for safe, false for unsafe).
  **/
 bool    disk_sanity_check(Disk *disk, size_t block, const char *data) {
-    if (disk->fd<0){
+    if (!disk){ //correct
+        printf("\n\nBAD DISK\n\n");
         return false;
     }
-    if (block
-
-    if data==
+    if (disk->fd<0){ //correct, probably don't need though
+        printf("\n\nBAD FILE\n\n");
+        return false;
+    }
+    if (block>disk->blocks){ //incorrect
+        printf("\n\nBAD BLOCK\n\n");
+        return false;
+    }
+    if (sizeof(data)!=BLOCK_SIZE){ //incorrect
+        printf("\n\nBAD DATA\n\n");
+        return false;
+    }
     return true;
 }
 
