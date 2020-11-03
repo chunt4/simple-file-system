@@ -47,12 +47,12 @@ void    fs_debug(Disk *disk) {
             printf("    direct blocks: %s\n", buffer);
             printf("    indirect block: %u\n", block.inodes[i].indirect);
             // Use indirect block number to disk read to get the indirect block, which is an array of pointers so you can iterate through it
-            ssize_t numBytes = disk_read(disk, block.inodes[i].indirect, block.data); 
+            /*ssize_t numBytes = disk_read(disk, block.inodes[i].indirect, block.data); 
             char indirectbuf[BUFSIZ];
             for (uint32_t j = 0; j < POINTERS_PER_INODE; j++){
                 sprintf(indirectbuf, "%s %u", indirectbuf, block.pointers[j]);
             }
-            printf("   indirect data blocks: %s\n", indirectbuf);
+            printf("   indirect data blocks: %s\n", indirectbuf);*/
         }
     }
 

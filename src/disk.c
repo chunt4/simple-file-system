@@ -97,12 +97,19 @@ void	disk_close(Disk *disk) {
 ssize_t disk_read(Disk *disk, size_t block, char *data) {
     // incorrect
     if (disk_sanity_check(disk, block, data)){
-        block = lseek(disk->fd, block, data);
-        ssize_t numBytes = read(disk->fd, data, block);
-        if (numBytes == BLOCK_SIZE){
+        if(lseek(disk->fd,block*BLOCK_SIZE,SEEK_SET)<0){
+            printf("\n\nLSEEK FAIL\n\n");
+            return DISK_FAILURE; //correct
+        }
+        //definitely wrong. help
+        if (read(disk->fd, data, BLOCK_SIZE) == BLOCK_SIZE){
+            disk->reads++;
             return BLOCK_SIZE;
         }
+        printf("\n\nLSEEK/READ FAIL\n\n");
+        return DISK_FAILURE;
     }
+    printf("\n\nSANITY CHECK FAILED\n\n");
     return DISK_FAILURE;
 }
 
@@ -126,12 +133,21 @@ ssize_t disk_read(Disk *disk, size_t block, char *data) {
 ssize_t disk_write(Disk *disk, size_t block, char *data) {
     //incorrect
     if (disk_sanity_check(disk, block, data)){
-        block = lseek(disk->fd, block, data);
-        ssize_t numBytes = write(disk->fd, data, block);
-        if (numBytes == BLOCK_SIZE){
+        if(lseek(disk->fd,block*BLOCK_SIZE,SEEK_SET)<0){
+            printf("\n\nLSEEK FAIL\n\n");
+            return DISK_FAILURE; //correct
+        }
+        //definitely wrong. help
+        if (write(disk->fd, data, BLOCK_SIZE) == BLOCK_SIZE){
+            disk->writes++;
             return BLOCK_SIZE;
         }
+        printf("\n\nLSEEK/READ FAIL\n\n");
+        return DISK_FAILURE;
     }
+    printf("\n\nSANITY CHECK FAILED\n\n");
+    return DISK_FAILURE;
+
     return DISK_FAILURE;
 
 }
@@ -155,20 +171,17 @@ ssize_t disk_write(Disk *disk, size_t block, char *data) {
  *              (true for safe, false for unsafe).
  **/
 bool    disk_sanity_check(Disk *disk, size_t block, const char *data) {
+    //sanity check works...for now
     if (!disk){ //correct
         printf("\n\nBAD DISK\n\n");
         return false;
     }
-    if (disk->fd<0){ //correct, probably don't need though
-        printf("\n\nBAD FILE\n\n");
-        return false;
-    }
-    if (block>disk->blocks){ //incorrect
-        printf("\n\nBAD BLOCK\n\n");
-        return false;
-    }
-    if (sizeof(data)!=BLOCK_SIZE){ //incorrect
+    if (!data){ //correct
         printf("\n\nBAD DATA\n\n");
+        return false;
+    }
+    if (block>=disk->blocks){ //correct
+        printf("\n\nBAD BLOCK\n\n");
         return false;
     }
     return true;
