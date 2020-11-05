@@ -20,47 +20,66 @@
  **/
 void    fs_debug(Disk *disk) {
     Block block;
-    printf("no");
+    //printf("\n\nFS_DEBUG START\n\n");
     /* Read SuperBlock */
     if (disk_read(disk, 0, block.data) == DISK_FAILURE) {
+        printf("\n\nFor some reason this fires\n\n");
         return;
     }
 
     printf("SuperBlock:\n");
     if (block.super.magic_number == MAGIC_NUMBER)
-        printf("    magic number is valid");
+        printf("    magic number is valid\n");
     else
-        printf("    magic number is not valid");
+        printf("    magic number is not valid\n");
     printf("    %u blocks\n"         , block.super.blocks);
     printf("    %u inode blocks\n"   , block.super.inode_blocks);
     printf("    %u inodes\n"         , block.super.inodes);
+    
+    for (uint32_t i = 1; i <= block.super.inode_blocks; i++){
+        if (disk_read(disk, i, block.data) == DISK_FAILURE){
+            return;
+        }
+    }
 
     /* Read Inodes */
-    for (uint32_t i = 0; i < INODES_PER_BLOCK; i++){
-        if (block.inodes[i].valid == 1){
+    for (uint32_t i = 1; i <= INODES_PER_BLOCK; i++){
+
+        //printf("\n\n ENTERED THE FOR LOOP \n\n");
+        /*if (disk_read(disk, i, block.data) == DISK_FAILURE){
+            return;
+        }*/
+        //printf("\n\n Valid: %i\n\n",block.inodes[i].valid);
+        if (block.inodes[i].valid==1){
             printf("Inode %u:\n", i);
             printf("    size: %u bytes\n", block.inodes[i].size);
-            char buffer[BUFSIZ];
+            char buffer[BUFSIZ] = {NULL};
             for (uint32_t j = 0; j < POINTERS_PER_INODE; j++){
-                sprintf(buffer, "%s %u", buffer, block.inodes[i].direct[j]);
+                if (block.inodes[i].direct[j] > 0)
+                    sprintf(buffer, "%s %u", buffer, block.inodes[i].direct[j]);
             }
-            printf("    direct blocks: %s\n", buffer);
-            printf("    indirect block: %u\n", block.inodes[i].indirect);
+            printf("    direct blocks:%s\n", buffer);
+            if (block.inodes[i].indirect){
+                printf("    indirect block: %u\n", block.inodes[i].indirect);
             // Use indirect block number to disk read to get the indirect block, which is an array of pointers so you can iterate through it
-            /*ssize_t numBytes = disk_read(disk, block.inodes[i].indirect, block.data); 
-            char indirectbuf[BUFSIZ];
-            for (uint32_t j = 0; j < POINTERS_PER_INODE; j++){
-                sprintf(indirectbuf, "%s %u", indirectbuf, block.pointers[j]);
+                char indirectbuf[BUFSIZ] = {NULL};
+                if(disk_read(disk, block.inodes[i].indirect, block.data) == BLOCK_SIZE){
+                    for (uint32_t j = 0; j < INODES_PER_BLOCK; j++){
+                        if (block.pointers[j]>0){
+                            sprintf(indirectbuf, "%s %u", indirectbuf, block.pointers[j]);
+                        }
+                    }
+                }
+                printf("    indirect data blocks:%s\n", indirectbuf);
             }
-            printf("   indirect data blocks: %s\n", indirectbuf);*/
         }
     }
 
     // Print total disk block reads and writes
     // disk->blocks, disk->reads, and disk->writes are important here
     // disk->fd is also thing but probs not as important 
-    printf("%zu disk block reads\n", disk->reads);
-    printf("%zu disk block writes\n", disk->writes);
+    //printf("%zu disk block reads\n", disk->reads);
+    //printf("%zu disk block writes\n", disk->writes);
 }
 
 /**
