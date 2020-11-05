@@ -34,9 +34,9 @@ Disk *	disk_open(const char *path, size_t blocks) {
     //disk_open complete and correct (I think)
     Disk * new_disk = malloc(sizeof(Disk));
     int fd = open(path, O_RDWR | O_CREAT, 0644);
-    printf("\n\nFile descriptor: %i\n\n", fd);
+    //printf("\n\nFile descriptor: %i\n\n", fd);
     if(fd<0){
-        printf("THIS IS THE BAD FILE POLICE REROOREROO");
+        //printf("THIS IS THE BAD FILE POLICE REROOREROO");
         if (!truncate(path, blocks*BLOCK_SIZE)){
             free(new_disk);
             return NULL;
@@ -72,8 +72,8 @@ Disk *	disk_open(const char *path, size_t blocks) {
 void	disk_close(Disk *disk) {
     //complete and correct (I think)
     close(disk->fd);
-    printf("The total number of disk reads is %zu\n", disk->reads);
-    printf("The total number of disk writes is %zu\n", disk->writes);
+    printf("%zu disk block reads\n" , disk->reads);
+    printf("%zu disk block writes\n", disk->writes);
     free(disk);
 }
 
@@ -98,18 +98,17 @@ ssize_t disk_read(Disk *disk, size_t block, char *data) {
     // incorrect
     if (disk_sanity_check(disk, block, data)){
         if(lseek(disk->fd,block*BLOCK_SIZE,SEEK_SET)<0){
-            printf("\n\nLSEEK FAIL\n\n");
+            //printf("\n\nLSEEK FAIL\n\n");
             return DISK_FAILURE; //correct
         }
-        //definitely wrong. help
         if (read(disk->fd, data, BLOCK_SIZE) == BLOCK_SIZE){
             disk->reads++;
             return BLOCK_SIZE;
         }
-        printf("\n\nLSEEK/READ FAIL\n\n");
+        //printf("\n\nLSEEK/READ FAIL\n\n");
         return DISK_FAILURE;
     }
-    printf("\n\nSANITY CHECK FAILED\n\n");
+    //printf("\n\nSANITY CHECK FAILED\n\n");
     return DISK_FAILURE;
 }
 
@@ -134,7 +133,7 @@ ssize_t disk_write(Disk *disk, size_t block, char *data) {
     //incorrect
     if (disk_sanity_check(disk, block, data)){
         if(lseek(disk->fd,block*BLOCK_SIZE,SEEK_SET)<0){
-            printf("\n\nLSEEK FAIL\n\n");
+            //printf("\n\nLSEEK FAIL\n\n");
             return DISK_FAILURE; //correct
         }
         //definitely wrong. help
@@ -142,11 +141,10 @@ ssize_t disk_write(Disk *disk, size_t block, char *data) {
             disk->writes++;
             return BLOCK_SIZE;
         }
-        printf("\n\nLSEEK/READ FAIL\n\n");
+        //printf("\n\nLSEEK/READ FAIL\n\n");
         return DISK_FAILURE;
     }
-    printf("\n\nSANITY CHECK FAILED\n\n");
-    return DISK_FAILURE;
+    //printf("\n\nSANITY CHECK FAILED\n\n");
 
     return DISK_FAILURE;
 
@@ -173,15 +171,15 @@ ssize_t disk_write(Disk *disk, size_t block, char *data) {
 bool    disk_sanity_check(Disk *disk, size_t block, const char *data) {
     //sanity check works...for now
     if (!disk){ //correct
-        printf("\n\nBAD DISK\n\n");
+        //printf("\n\nBAD DISK\n\n");
         return false;
     }
     if (!data){ //correct
-        printf("\n\nBAD DATA\n\n");
+        //printf("\n\nBAD DATA\n\n");
         return false;
     }
     if (block>=disk->blocks){ //correct
-        printf("\n\nBAD BLOCK\n\n");
+        //printf("\n\nBAD BLOCK\n\n");
         return false;
     }
     return true;
