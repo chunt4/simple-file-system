@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 /* External Functions */
 
@@ -98,7 +99,67 @@ void    fs_debug(Disk *disk) {
  * @return      Whether or not all disk operations were successful.
  **/
 bool    fs_format(FileSystem *fs, Disk *disk) {
-    return false;
+    //printf("\n\n%d\n\n",disk->blocks);
+    //printf("\n\n%d\n\n",fs->meta_data.blocks);
+    if (fs->disk){
+        return false;
+    }
+    Block block;
+    block.super.magic_number = MAGIC_NUMBER;
+    block.super.blocks = disk->blocks;
+    if (disk->blocks%10 == 0){
+        block.super.inode_blocks = disk->blocks/10;
+    }
+    else{
+        block.super.inode_blocks = (int)disk->blocks/10 + 1;
+    }
+    block.super.inodes = block.super.inode_blocks*INODES_PER_BLOCK;
+    /*bool *bitmap = calloc(block.super.blocks, sizeof(bool));
+    for (int a = 0; a < block.super.blocks; a++){
+        bitmap[a] = true;
+    }*/
+    /*for (uint32_t i = 1; i <= block.super.inode_blocks; i++){
+        Block block2;
+        if(disk_read(disk, i, block2.data)==BLOCK_SIZE){
+            for (uint32_t j = 0; j < INODES_PER_BlOCK; j++){
+                if (block2.inodes[j].valid==1){
+                    bitmap[j] = false;
+                }
+            }
+        }
+    }*/
+    if(disk_write(disk, 0, block.data)==DISK_FAILURE){
+        return false;
+    }
+    
+    for(uint32_t a = 1; a <= block.super.inode_blocks; a++){
+        Block block2;
+        //clear the inode blocks
+        for (uint32_t d = 0; d < INODES_PER_BLOCK; d++){
+            block2.inodes[d].valid = 0;
+            block2.inodes[d].size = 0;
+            for (uint32_t e = 0; e < POINTERS_PER_INODE; e++){
+                block2.inodes[d].direct[e] = NULL;
+            }
+            block2.inodes[d].indirect = NULL;
+        }
+        if(disk_write(disk, a, block2.data)==DISK_FAILURE){
+            return false;
+        }
+    }
+
+    for (uint32_t b = block.super.inode_blocks+1; b < block.super.blocks; b++){
+        Block block3;
+        //clear the data blocks
+        for (uint32_t c = 0; c < BLOCK_SIZE; c++){
+            block3.data[c] = 0;
+        }
+        if(disk_write(disk, b, block3.data)==DISK_FAILURE){
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /**
