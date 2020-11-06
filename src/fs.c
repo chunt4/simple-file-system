@@ -160,6 +160,10 @@ bool    fs_format(FileSystem *fs, Disk *disk) {
  * @return      Whether or not the mount operation was successful.
  **/
 bool    fs_mount(FileSystem *fs, Disk *disk) {
+
+    // Problem: Does not record correct number of reads and writes
+    // Bitmap, edge cases are all correct though
+
     // Verify disk
     if(!disk){
         return false;
@@ -251,6 +255,35 @@ void    fs_unmount(FileSystem *fs) {
  * @return      Inode number of allocated Inode.
  **/
 ssize_t fs_create(FileSystem *fs) {
+
+    // Problem: Does not seem to retain from one fs_create call to the next, even after updating the valid bit and writing to the disk
+    // Question: Are we not allowed to use Block in this?
+
+    Block block;
+    if (disk_read(fs->disk,0,block.data)==DISK_FAILURE){
+        return -1;
+    }
+    for (uint32_t i = 1; i <= fs->meta_data.inode_blocks; i++){
+        if (disk_read(fs->disk,i,block.data)==DISK_FAILURE){
+            continue;
+        }
+        Block block2;
+        for (uint32_t j = 0; j < INODES_PER_BLOCK; j++){
+            //printf("\nj: %i\n",j);
+
+            if (block2.inodes[i].valid==0){
+                //printf("\nHello I'm Valid\n");
+                block2.inodes[i].valid=1;
+                if(disk_write(fs->disk,i,block2.data)==DISK_FAILURE){
+                    return -1;
+                }
+                Inode *newInode = malloc(sizeof(Inode));
+                printf("\nj: %i\n",j);
+
+                return j;
+            }
+        }
+    }
     return -1;
 }
 
@@ -270,6 +303,7 @@ ssize_t fs_create(FileSystem *fs) {
  * @return      Whether or not removing the specified Inode was successful.
  **/
 bool    fs_remove(FileSystem *fs, size_t inode_number) {
+    
     return false;
 }
 
