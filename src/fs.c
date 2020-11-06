@@ -160,10 +160,6 @@ bool    fs_format(FileSystem *fs, Disk *disk) {
  * @return      Whether or not the mount operation was successful.
  **/
 bool    fs_mount(FileSystem *fs, Disk *disk) {
-    // Mount check
-    if(fs->disk){
-        return false;
-    }
     // Verify disk
     if(!disk){
         return false;
@@ -171,6 +167,10 @@ bool    fs_mount(FileSystem *fs, Disk *disk) {
     // Read SuperBlock
     Block block;
     if(disk_read(disk, 0, block.data)==DISK_FAILURE){
+        //printf("\n\nHELLO FAILURE\n\n");
+        return false;
+    }
+    if(fs->disk){
         return false;
     }
     fs->disk = disk;
@@ -181,18 +181,46 @@ bool    fs_mount(FileSystem *fs, Disk *disk) {
     for (int a = 0; a < block.super.blocks; a++){
         bitmap[a] = true;
     }
+    bitmap[0]=false;
+    //printf("\n\nSET UP BITMAP\n\n");
     for (uint32_t i = 1; i <= block.super.inode_blocks; i++){
         Block block2;
+        //printf("\n\nINODE BLOCK %i\n\n", i);
         if(disk_read(disk, i, block2.data)==BLOCK_SIZE){
             for (uint32_t j = 0; j < INODES_PER_BLOCK; j++){
-                if (block2.inodes[j].valid==0){
-                    bitmap[j] = false;
+                //printf("\n\nValid: %i\n\n", block2.inodes[j].valid);
+                if (block2.inodes[j].valid==1){
+                    //printf("\n\nVALID INODE %u\n\n", j);
+                    for (uint32_t k = 0; k < POINTERS_PER_INODE; k++){
+                        if(block2.inodes[j].direct[k]>0){
+                            //printf("\n\nDIRECT %u\n\n",block2.inodes[j].direct[k]);
+                            bitmap[block2.inodes[j].direct[k]]=false;
+                        }
+                    }
+                    //printf("\n\nBut does it make it here?\n\n");
+                    if (block2.inodes[j].indirect){
+                        Block block3;
+                        bitmap[block2.inodes[j].indirect]=false;
+                        if(disk_read(disk,block2.inodes[j].indirect,block3.data)==BLOCK_SIZE){
+                            for (uint32_t m = 0; m < INODES_PER_BLOCK; m++){
+                                if(block3.pointers[m]>0){
+                                    bitmap[block3.pointers[m]]=false;
+                                }
+                            }
+                        }
+                    }
                 }
             }
+            bitmap[i]=false;
         }
     }
-    
     fs->free_blocks = bitmap;
+    /*printf("\n\n%i\n\n",fs->free_blocks[0]);
+    printf("\n\n%i\n\n",fs->free_blocks[1]);
+    printf("\n\n%i\n\n",fs->free_blocks[2]);
+    printf("\n\n%i\n\n",fs->free_blocks[3]);
+    printf("\n\n%i\n\n",fs->free_blocks[4]);*/
+
     return true;
 }
 
@@ -206,6 +234,8 @@ bool    fs_mount(FileSystem *fs, Disk *disk) {
  * @param       fs      Pointer to FileSystem structure.
  **/
 void    fs_unmount(FileSystem *fs) {
+    fs->disk = NULL;
+    free(fs->free_blocks);
 }
 
 /**
