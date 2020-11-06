@@ -21,13 +21,12 @@
  **/
 void    fs_debug(Disk *disk) {
     Block block;
-    //printf("\n\nFS_DEBUG START\n\n");
-    /* Read SuperBlock */
+    // Read SuperBlock
     if (disk_read(disk, 0, block.data) == DISK_FAILURE) {
-        //printf("\n\nFor some reason this fires\n\n");
         return;
     }
 
+    // Print SuperBlock Information
     printf("SuperBlock:\n");
     if (block.super.magic_number == MAGIC_NUMBER)
         printf("    magic number is valid\n");
@@ -37,32 +36,32 @@ void    fs_debug(Disk *disk) {
     printf("    %u inode blocks\n"   , block.super.inode_blocks);
     printf("    %u inodes\n"         , block.super.inodes);
     
+    // Print Inode Information
     for (uint32_t k = 1; k <= block.super.inode_blocks; k++){
         Block block2;
+        // Check if the inode block successfully reads
         if (disk_read(disk, k, block2.data) == BLOCK_SIZE){
-
-            /* Read Inodes */
+            // Read Inodes
             for (uint32_t i = 0; i < INODES_PER_BLOCK; i++){
-
-                //printf("\n\n ENTERED THE FOR LOOP \n\n");
-                /*if (disk_read(disk, i, block.data) == DISK_FAILURE){
-                    return;
-                }*/
-                //printf("\n\n Valid: %i\n\n",block2.inodes[i].valid);
+                // Check if inode is valid
                 if (block2.inodes[i].valid==1){
+                    // Print General Inode Information
                     printf("Inode %u:\n", i);
                     printf("    size: %u bytes\n", block2.inodes[i].size);
                     char buffer[BUFSIZ] = {NULL};
+                    // Print direct blocks
                     for (uint32_t j = 0; j < POINTERS_PER_INODE; j++){
                         if (block2.inodes[i].direct[j] > 0)
                             sprintf(buffer, "%s %u", buffer, block2.inodes[i].direct[j]);
                     }
                     printf("    direct blocks:%s\n", buffer);
+                    // Check and print indirect block
                     if (block2.inodes[i].indirect){
                         Block block3;
                         printf("    indirect block: %u\n", block2.inodes[i].indirect);
                     // Use indirect block number to disk read to get the indirect block, which is an array of pointers so you can iterate through it
                         char indirectbuf[BUFSIZ] = {NULL};
+                        // Read indirect block and print pointers
                         if(disk_read(disk, block2.inodes[i].indirect, block3.data) == BLOCK_SIZE){
                             for (uint32_t j = 0; j < INODES_PER_BLOCK; j++){
                                 if (block3.pointers[j]>0){
@@ -76,12 +75,6 @@ void    fs_debug(Disk *disk) {
             }
         }
     }
-
-    // Print total disk block reads and writes
-    // disk->blocks, disk->reads, and disk->writes are important here
-    // disk->fd is also thing but probs not as important 
-    //printf("%zu disk block reads\n", disk->reads);
-    //printf("%zu disk block writes\n", disk->writes);
 }
 
 /**
@@ -114,20 +107,7 @@ bool    fs_format(FileSystem *fs, Disk *disk) {
         block.super.inode_blocks = (int)disk->blocks/10 + 1;
     }
     block.super.inodes = block.super.inode_blocks*INODES_PER_BLOCK;
-    /*bool *bitmap = calloc(block.super.blocks, sizeof(bool));
-    for (int a = 0; a < block.super.blocks; a++){
-        bitmap[a] = true;
-    }*/
-    /*for (uint32_t i = 1; i <= block.super.inode_blocks; i++){
-        Block block2;
-        if(disk_read(disk, i, block2.data)==BLOCK_SIZE){
-            for (uint32_t j = 0; j < INODES_PER_BlOCK; j++){
-                if (block2.inodes[j].valid==1){
-                    bitmap[j] = false;
-                }
-            }
-        }
-    }*/
+
     if(disk_write(disk, 0, block.data)==DISK_FAILURE){
         return false;
     }
@@ -180,7 +160,40 @@ bool    fs_format(FileSystem *fs, Disk *disk) {
  * @return      Whether or not the mount operation was successful.
  **/
 bool    fs_mount(FileSystem *fs, Disk *disk) {
-    return false;
+    // Mount check
+    if(fs->disk){
+        return false;
+    }
+    // Verify disk
+    if(!disk){
+        return false;
+    }
+    // Read SuperBlock
+    Block block;
+    if(disk_read(disk, 0, block.data)==DISK_FAILURE){
+        return false;
+    }
+    fs->disk = disk;
+    // Copy Superblock to meta_data
+    fs->meta_data = block.super;
+
+    bool *bitmap = calloc(block.super.blocks, sizeof(bool));
+    for (int a = 0; a < block.super.blocks; a++){
+        bitmap[a] = true;
+    }
+    for (uint32_t i = 1; i <= block.super.inode_blocks; i++){
+        Block block2;
+        if(disk_read(disk, i, block2.data)==BLOCK_SIZE){
+            for (uint32_t j = 0; j < INODES_PER_BLOCK; j++){
+                if (block2.inodes[j].valid==0){
+                    bitmap[j] = false;
+                }
+            }
+        }
+    }
+    
+    fs->free_blocks = bitmap;
+    return true;
 }
 
 /**
