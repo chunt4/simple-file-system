@@ -48,7 +48,7 @@ void    fs_debug(Disk *disk) {
                     // Print General Inode Information
                     printf("Inode %u:\n", i);
                     printf("    size: %u bytes\n", block2.inodes[i].size);
-                    char buffer[BUFSIZ] = {NULL};
+                    char buffer[BUFSIZ] = {0};
                     // Print direct blocks
                     for (uint32_t j = 0; j < POINTERS_PER_INODE; j++){
                         if (block2.inodes[i].direct[j] > 0)
@@ -60,7 +60,7 @@ void    fs_debug(Disk *disk) {
                         Block block3;
                         printf("    indirect block: %u\n", block2.inodes[i].indirect);
                     // Use indirect block number to disk read to get the indirect block, which is an array of pointers so you can iterate through it
-                        char indirectbuf[BUFSIZ] = {NULL};
+                        char indirectbuf[BUFSIZ] = {0};
                         // Read indirect block and print pointers
                         if(disk_read(disk, block2.inodes[i].indirect, block3.data) == BLOCK_SIZE){
                             for (uint32_t j = 0; j < INODES_PER_BLOCK; j++){
@@ -119,9 +119,9 @@ bool    fs_format(FileSystem *fs, Disk *disk) {
             block2.inodes[d].valid = 0;
             block2.inodes[d].size = 0;
             for (uint32_t e = 0; e < POINTERS_PER_INODE; e++){
-                block2.inodes[d].direct[e] = NULL;
+                block2.inodes[d].direct[e] = 0;
             }
-            block2.inodes[d].indirect = NULL;
+            block2.inodes[d].indirect = 0;
         }
         if(disk_write(disk, a, block2.data)==DISK_FAILURE){
             return false;
@@ -164,19 +164,17 @@ bool    fs_mount(FileSystem *fs, Disk *disk) {
     // Problem: Does not record correct number of reads and writes
     // Bitmap, edge cases are all correct though
 
-    // Verify disk
-    if(!disk){
+    if(fs->disk){
         return false;
     }
+
     // Read SuperBlock
     Block block;
     if(disk_read(disk, 0, block.data)==DISK_FAILURE){
         //printf("\n\nHELLO FAILURE\n\n");
         return false;
     }
-    if(fs->disk){
-        return false;
-    }
+
     fs->disk = disk;
     // Copy Superblock to meta_data
     fs->meta_data = block.super;
@@ -224,7 +222,7 @@ bool    fs_mount(FileSystem *fs, Disk *disk) {
     printf("\n\n%i\n\n",fs->free_blocks[2]);
     printf("\n\n%i\n\n",fs->free_blocks[3]);
     printf("\n\n%i\n\n",fs->free_blocks[4]);*/
-
+    //printf("\nEND OF MOUNT\n");
     return true;
 }
 
@@ -267,20 +265,20 @@ ssize_t fs_create(FileSystem *fs) {
         if (disk_read(fs->disk,i,block.data)==DISK_FAILURE){
             continue;
         }
-        Block block2;
         for (uint32_t j = 0; j < INODES_PER_BLOCK; j++){
             //printf("\nj: %i\n",j);
 
-            if (block2.inodes[i].valid==0){
+            if (block.inodes[i].valid==0){
                 //printf("\nHello I'm Valid\n");
-                block2.inodes[i].valid=1;
-                if(disk_write(fs->disk,i,block2.data)==DISK_FAILURE){
+                block.inodes[i].valid=1;
+                block.inodes[i].size=0;
+                if(disk_write(fs->disk,i,block.data)==DISK_FAILURE){
                     return -1;
                 }
-                Inode *newInode = malloc(sizeof(Inode));
+                
                 printf("\nj: %i\n",j);
 
-                return j;
+                return (i-1) * INODES_PER_BLOCK + j;
             }
         }
     }
