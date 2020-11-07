@@ -9,6 +9,10 @@
 #include <math.h>
 
 /* External Functions */
+bool fs_load_inode(FileSystem *fs, size_t inode_number, Inode *node);
+bool fs_save_inode(FileSystem *fs, size_t inode_number, Inode *node);
+void fs_initialize_free_block_bitmap(FileSystem *fs);
+ssize_t fs_allocate_free_block(FileSystem *fs);
 
 /**
  * Debug FileSystem by doing the following:
@@ -274,13 +278,13 @@ ssize_t fs_create(FileSystem *fs) {
             if (block2.inodes[i].valid==0){
                 //printf("\nHello I'm Valid\n");
                 block2.inodes[i].valid=1;
+                block2.inodes[i].size=0;
                 if(disk_write(fs->disk,i,block2.data)==DISK_FAILURE){
                     return -1;
-                }
-                Inode *newInode = malloc(sizeof(Inode));
-                printf("\nj: %i\n",j);
+                }     
+                //printf("\nj: %i\n",j);
 
-                return j;
+                return (i-1) * INODES_PER_BLOCK + j;
             }
         }
     }
