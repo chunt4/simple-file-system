@@ -386,11 +386,14 @@ ssize_t fs_stat(FileSystem *fs, size_t inode_number) {
 ssize_t fs_read(FileSystem *fs, size_t inode_number, char *data, size_t length, size_t offset) {
     Block block;
     size_t inode_block = (size_t)((int)(inode_number/INODES_PER_BLOCK)+1);
+    printf("\n\nINODE BLOCK: %i\n\n", inode_block);
     if (disk_read(fs->disk,inode_block,block.data)==DISK_FAILURE){
-        return false;
+        printf("\n\nSTILL NOT READING\n\n");
+        return -1;
     }
+    printf("\n\nIT READ PROPERLY\n\n");
     if (block.inodes[inode_number].valid==1){
-        printf("\n\n YES \n\n");
+        //printf("\n\nIT IS VALID\n\n");
         //return length of the file
         //if file is 100 and block is 4K, return 100
         //if file is 5000 and block is 4K, return 5000 for first
@@ -401,13 +404,10 @@ ssize_t fs_read(FileSystem *fs, size_t inode_number, char *data, size_t length, 
         //it would read 4000 - 6000 and then 6000 - 8000
         //ssize_t inodeSize = fs_stat(fs, inode_number);
         if (length <= BLOCK_SIZE){
-            read(block.data[offset],data,length);
-            printf("\n\n READ COMPLETE \n\n");
-            return length;
+            return read(block.data[offset],data,length);            
         }
         else{
-            printf("\n\n RECURSIVELY CALL READ \n\n");
-            return fs_read(fs,inode_number,data,length-BLOCK_SIZE,offset);
+            return read(block.data[offset],data,length-BLOCK_SIZE);
         }
     }
     return -1;
@@ -434,7 +434,7 @@ ssize_t fs_write(FileSystem *fs, size_t inode_number, char *data, size_t length,
     Block block;
     size_t inode_block = (size_t)((int)(inode_number/INODES_PER_BLOCK)+1);
     if (disk_read(fs->disk,inode_block,block.data)==DISK_FAILURE){
-        return false;
+        return -1;
     }
     if (block.inodes[inode_number].valid==1){
         //return length of the file
@@ -447,9 +447,9 @@ ssize_t fs_write(FileSystem *fs, size_t inode_number, char *data, size_t length,
         //it would read 4000 - 6000 and then 6000 - 8000
         //ssize_t inodeSize = fs_stat(fs, inode_number);
         if (length <= BLOCK_SIZE){
-            write(block.data[offset],data,length);
-            disk_write(fs->disk,inode_block,block.data);
-            return length;
+            return (write(block.data[offset],data,length));
+            //disk_write(fs->disk,inode_block,block.data);
+            //return length;
         }
         else{
             return fs_write(fs,inode_number,data,length-BLOCK_SIZE,offset);

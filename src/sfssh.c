@@ -264,10 +264,14 @@ bool copyout(FileSystem *fs, size_t inode_number, const char *path) {
     char buffer[4*BUFSIZ] = {0};
     size_t offset = 0;
     while (true) {
+        printf("\n\nENTER WHILE\n\n");
         ssize_t result = fs_read(fs, inode_number, buffer, sizeof(buffer), offset);
+        printf("\n\nRESULT: %zu\n\n", result);
         if (result <= 0) {
+            printf("\n\nRESULT IS 0 OR LESS\n\n");
             break;
         }
+        printf("\n\nRESULT: %zu\n\n",result);
         fwrite(buffer, 1, result, stream);
         offset += result;
     }
