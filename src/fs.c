@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <unistd.h>
 
 /* External Functions */
 
@@ -63,7 +64,7 @@ void    fs_debug(Disk *disk) {
                         char indirectbuf[BUFSIZ] = {0};
                         // Read indirect block and print pointers
                         if(disk_read(disk, block2.inodes[i].indirect, block3.data) == BLOCK_SIZE){
-                            for (uint32_t j = 0; j < INODES_PER_BLOCK; j++){
+                            for (uint32_t j = 0; j < POINTERS_PER_BLOCK; j++){
                                 if (block3.pointers[j]>0){
                                     sprintf(indirectbuf, "%s %u", indirectbuf, block3.pointers[j]);
                                 }
@@ -161,9 +162,7 @@ bool    fs_format(FileSystem *fs, Disk *disk) {
  **/
 bool    fs_mount(FileSystem *fs, Disk *disk) {
 
-    // Problem: Does not record correct number of reads and writes
-    // Bitmap, edge cases are all correct though
-
+    //printf("\nMOUNT ENTER\n");
     if(fs->disk){
         return false;
     }
@@ -172,6 +171,7 @@ bool    fs_mount(FileSystem *fs, Disk *disk) {
     Block block;
     if(disk_read(disk, 0, block.data)==DISK_FAILURE){
         //printf("\n\nHELLO FAILURE\n\n");
+        disk->reads++;
         return false;
     }
 
@@ -204,7 +204,7 @@ bool    fs_mount(FileSystem *fs, Disk *disk) {
                         Block block3;
                         bitmap[block2.inodes[j].indirect]=false;
                         if(disk_read(disk,block2.inodes[j].indirect,block3.data)==BLOCK_SIZE){
-                            for (uint32_t m = 0; m < INODES_PER_BLOCK; m++){
+                            for (uint32_t m = 0; m < POINTERS_PER_BLOCK; m++){
                                 if(block3.pointers[m]>0){
                                     bitmap[block3.pointers[m]]=false;
                                 }
@@ -238,6 +238,7 @@ bool    fs_mount(FileSystem *fs, Disk *disk) {
 void    fs_unmount(FileSystem *fs) {
     fs->disk = NULL;
     free(fs->free_blocks);
+    fs->free_blocks=NULL;
 }
 
 /**
@@ -254,31 +255,29 @@ void    fs_unmount(FileSystem *fs) {
  **/
 ssize_t fs_create(FileSystem *fs) {
 
-    // Problem: Does not seem to retain from one fs_create call to the next, even after updating the valid bit and writing to the disk
-    // Question: Are we not allowed to use Block in this?
-
-    Block block;
-    if (disk_read(fs->disk,0,block.data)==DISK_FAILURE){
-        return -1;
-    }
+    // Problem: This should work, but all of the inodes are valid?
+    
+    //printf("\nYO YO\n");
     for (uint32_t i = 1; i <= fs->meta_data.inode_blocks; i++){
-        if (disk_read(fs->disk,i,block.data)==DISK_FAILURE){
-            continue;
-        }
-        for (uint32_t j = 0; j < INODES_PER_BLOCK; j++){
-            //printf("\nj: %i\n",j);
-
-            if (block.inodes[i].valid==0){
-                //printf("\nHello I'm Valid\n");
-                block.inodes[i].valid=1;
-                block.inodes[i].size=0;
-                if(disk_write(fs->disk,i,block.data)==DISK_FAILURE){
-                    return -1;
+        Block block;
+        //printf("\ni: %i\n",i);
+        if (disk_read(fs->disk,i,block.data)==BLOCK_SIZE){
+            for (uint32_t j = 0; j < INODES_PER_BLOCK; j++){
+                //printf("\nj: %i\n",j);
+                //printf("\nVALID: %i\n",block.inodes[i].valid);
+                if (block.inodes[j].valid==0){
+                    //printf("\nHello I'm Valid\n");
+                    block.inodes[j].valid=1;
+                    block.inodes[j].size=0;
+                    
+                    if(disk_write(fs->disk,i,block.data)==DISK_FAILURE){
+                        return -1;
+                    }
+                    
+                    //printf("\nj: %i\n",j);
+                    fs->disk->reads++;
+                    return (i-1) * INODES_PER_BLOCK + j;
                 }
-                
-                printf("\nj: %i\n",j);
-
-                return (i-1) * INODES_PER_BLOCK + j;
             }
         }
     }
@@ -301,7 +300,45 @@ ssize_t fs_create(FileSystem *fs) {
  * @return      Whether or not removing the specified Inode was successful.
  **/
 bool    fs_remove(FileSystem *fs, size_t inode_number) {
-    
+    Block block;
+    size_t inode_block = (size_t)((int)(inode_number/INODES_PER_BLOCK)+1);
+    //printf("\n\nINODE BLOCK: %zu\n\n",inode_block);
+    if (disk_read(fs->disk,inode_block,block.data)==DISK_FAILURE){
+        return false;
+    }
+    if (block.inodes[inode_number].valid==1){
+        for (uint32_t i = 0; i < POINTERS_PER_INODE; i++){
+            if(block.inodes[inode_number].direct[i]>0){
+                fs->free_blocks[block.inodes[inode_number].direct[i]] = true;
+                block.inodes[inode_number].direct[i] = 0;
+                //fs->free_blocks[block.inodes[inode_number].direct[i]] = true;
+            }
+        }
+        if(block.inodes[inode_number].indirect){
+            Block block2;
+            if(disk_read(fs->disk,block.inodes[inode_number].indirect,block2.data)==DISK_FAILURE){
+                return false;
+            }
+            for (uint32_t m = 0; m < POINTERS_PER_BLOCK; m++){
+                if(block2.pointers[m]>0){
+                    //printf("\n\nINDIRECT DATA BLOCK: %u\n\n",block2.pointers[m]);
+                    fs->free_blocks[block2.pointers[m]]=true;
+                    block.pointers[m] = 0;
+                }
+            }
+            fs->free_blocks[block.inodes[inode_number].indirect] = true;
+            block.inodes[inode_number].indirect = 0;
+        }
+        //fs->free_blocks[block.inodes[inode_number].indirect] = true;
+        //printf("\n\nChange valid to 0\n\n");
+        block.inodes[inode_number].valid = 0;
+        block.inodes[inode_number].size = 0;
+        if(disk_write(fs->disk,inode_block,block.data)==DISK_FAILURE){
+            return false;
+        };
+        //fs->disk->reads++;
+        return true;
+    }
     return false;
 }
 
@@ -313,7 +350,20 @@ bool    fs_remove(FileSystem *fs, size_t inode_number) {
  * @return      Size of specified Inode (-1 if does not exist).
  **/
 ssize_t fs_stat(FileSystem *fs, size_t inode_number) {
-    return -1;
+    Block block;
+    ssize_t inodeSize;
+    size_t inode_block = (size_t)((int)(inode_number/INODES_PER_BLOCK)+1);
+    if (disk_read(fs->disk,inode_block,block.data)==DISK_FAILURE){
+        return -1;
+    }
+    if (block.inodes[inode_number].valid==0){
+        return -1;
+    }
+    if (inode_number > fs->meta_data.inode_blocks*INODES_PER_BLOCK){
+        return -1;
+    }
+    inodeSize = block.inodes[inode_number].size;
+    return inodeSize;
 }
 
 /**
@@ -334,6 +384,32 @@ ssize_t fs_stat(FileSystem *fs, size_t inode_number) {
  * @return      Number of bytes read (-1 on error).
  **/
 ssize_t fs_read(FileSystem *fs, size_t inode_number, char *data, size_t length, size_t offset) {
+    Block block;
+    size_t inode_block = (size_t)((int)(inode_number/INODES_PER_BLOCK)+1);
+    if (disk_read(fs->disk,inode_block,block.data)==DISK_FAILURE){
+        return false;
+    }
+    if (block.inodes[inode_number].valid==1){
+        printf("\n\n YES \n\n");
+        //return length of the file
+        //if file is 100 and block is 4K, return 100
+        //if file is 5000 and block is 4K, return 5000 for first
+        //read and 5000 - 4K for sequential reads
+        //inodeSize - 8000 for example
+        //length - 2000
+        //offset - 4000
+        //it would read 4000 - 6000 and then 6000 - 8000
+        //ssize_t inodeSize = fs_stat(fs, inode_number);
+        if (length <= BLOCK_SIZE){
+            read(block.data[offset],data,length);
+            printf("\n\n READ COMPLETE \n\n");
+            return length;
+        }
+        else{
+            printf("\n\n RECURSIVELY CALL READ \n\n");
+            return fs_read(fs,inode_number,data,length-BLOCK_SIZE,offset);
+        }
+    }
     return -1;
 }
 
@@ -355,7 +431,32 @@ ssize_t fs_read(FileSystem *fs, size_t inode_number, char *data, size_t length, 
  * @return      Number of bytes read (-1 on error).
  **/
 ssize_t fs_write(FileSystem *fs, size_t inode_number, char *data, size_t length, size_t offset) {
+    Block block;
+    size_t inode_block = (size_t)((int)(inode_number/INODES_PER_BLOCK)+1);
+    if (disk_read(fs->disk,inode_block,block.data)==DISK_FAILURE){
+        return false;
+    }
+    if (block.inodes[inode_number].valid==1){
+        //return length of the file
+        //if file is 100 and block is 4K, return 100
+        //if file is 5000 and block is 4K, return 5000 for first
+        //read and 5000 - 4K for sequential reads
+        //inodeSize - 8000 for example
+        //length - 2000
+        //offset - 4000
+        //it would read 4000 - 6000 and then 6000 - 8000
+        //ssize_t inodeSize = fs_stat(fs, inode_number);
+        if (length <= BLOCK_SIZE){
+            write(block.data[offset],data,length);
+            disk_write(fs->disk,inode_block,block.data);
+            return length;
+        }
+        else{
+            return fs_write(fs,inode_number,data,length-BLOCK_SIZE,offset);
+        }
+    }
     return -1;
+
 }
 
 /* vim: set expandtab sts=4 sw=4 ts=8 ft=c: */
