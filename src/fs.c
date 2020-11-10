@@ -395,57 +395,98 @@ ssize_t fs_read(FileSystem *fs, size_t inode_number, char *data, size_t length, 
         //printf("\n\nSTILL NOT READING\n\n");
         return -1;
     }
-    if (offset>=length){
+    if (offset>=length || offset>=block.inodes[inode_number].size){
         return -1;
     }
     //printf("\n\nIT READ PROPERLY\n\n");
     //printf("\n\nSIZE OF FILE: %u\n\n",block.inodes[inode_number].size);
     if (block.inodes[inode_number].valid==1){
-        int blockArray[BUFSIZ] = {0};
-        int arrayIndex = 0;
         for (uint32_t m = 0; m < POINTERS_PER_INODE; m++){
             if (block.inodes[inode_number].direct[m]>0){
-                blockArray[arrayIndex++] = (int)block.inodes[inode_number].direct[m];
+                if ((int)offset/BLOCK_SIZE==m){
+                    Block block2;
+                    printf("\n\nDIRECT BLOCK: %u\n\n",block.inodes[inode_number].direct[m]);
+                    if (disk_read(fs->disk,block.inodes[inode_number].direct[m],block2.data)==DISK_FAILURE){
+                        return -1;
+                    }
+                    else{
+                        if (offset+BLOCK_SIZE<=block.inodes[inode_number].size && offset+BLOCK_SIZE<=length){
+                            memcpy(data+offset,block2.data,BLOCK_SIZE);
+                            return BLOCK_SIZE;
+                        }
+                        else{
+                            memcpy(data+offset,block2.data,block.inodes[inode_number].size-offset);
+                            return block.inodes[inode_number].size-offset;
+                        }
+                    }
+                }
             }
         }
         Block block3;
         if(disk_read(fs->disk,block.inodes[inode_number].indirect,block3.data)==BLOCK_SIZE){
             for (uint32_t n = 0; n < POINTERS_PER_BLOCK; n++){
                 if (block3.pointers[n]){
-                    blockArray[arrayIndex++] = (int)block3.pointers[n];
+                    Block block4;
+                    if ((int)offset/BLOCK_SIZE==n+POINTERS_PER_INODE){
+                        printf("\n\nINDIRECT BLOCK: %u\n\n",block3.pointers[n]);
+
+                        if (disk_read(fs->disk,block3.pointers[n],block4.data)==DISK_FAILURE){
+                            return -1;
+                        }
+                        else{
+                            if (offset+BLOCK_SIZE<=block.inodes[inode_number].size && offset+BLOCK_SIZE<=length){
+                                memcpy(data+offset,block4.data,BLOCK_SIZE);
+                                return BLOCK_SIZE;
+                            }
+                            else{
+                                memcpy(data+offset,block4.data,block.inodes[inode_number].size-offset);
+                                return block.inodes[inode_number].size-offset;
+                            }
+
+                        }
+                    }
                 }
             }
         }
         else{
             return -1;
         }
-        /*if(offset==block.inodes[inode_number].size){
+    }
+    else{
+        return -1;
+    }
+    return -1;
+    /*}
+        if(offset==block.inodes[inode_number].size){
             memcpy(data,blo,length-offset);
-        }*/
+        }
         int offnum = (int)offset/BLOCK_SIZE;
         //printf("\n\nOFFSET: %zu\n\n",offset);
         //printf("\n\n WE BACK IN DIS BIH: %i\n\n", offnum);
-        //printf("\n\nBLOCK NUM: %i\n\n",blockArray[offnum]);
+        //printf("\n\nBLOCK NUM: %zu\n\n",(size_t)blockArray[offnum]);
         Block block2;
+        data = data+offset;
         if(disk_read(fs->disk,(size_t)blockArray[offnum],block2.data)==BLOCK_SIZE){
-            //printf("\n\n HELLO: %u \n\n",offset+BLOCK_SIZE);
+            printf("\n\n HELLO: %u \n\n",offset+BLOCK_SIZE);
             if (offset+BLOCK_SIZE<=block.inodes[inode_number].size && offset+BLOCK_SIZE<=length){
-                memcpy(data,block2.data+offset,BLOCK_SIZE);
+                memcpy(data,block2.data,BLOCK_SIZE);
                 return BLOCK_SIZE;
             }
             else if (offset+BLOCK_SIZE>block.inodes[inode_number].size){
-                //printf("\n\nHIT MEMCPY\n\n");
-                memcpy(data,block2.data+offset,block.inodes[inode_number].size-offset);
+                printf("\n\nHIT MEMCPY. OFFSET: %zu\n\n",offset);
+                printf("\n\nINODE SIZE: %zu\n\n",block.inodes[inode_number].size);
+                memcpy(data,block2.data,block.inodes[inode_number].size-offset);
                 return block.inodes[inode_number].size-offset;
             }
             //printf("\n\nRETURNED AND SET TO TRUE: %zu\n\n",filecount);
         }
         else{
+            //return block.inodes[inode_number].size-offset;
             return -1;
         }
     }
 
-    return -1;
+    return -1;*/
 }
 
 /**
@@ -476,11 +517,102 @@ ssize_t fs_write(FileSystem *fs, size_t inode_number, char *data, size_t length,
         //printf("\n\nSTILL NOT READING\n\n");
         return -1;
     }
-    if (offset>=length){
+    if (offset>=length || offset>=block.inodes[inode_number].size){
         return -1;
     }
-    //printf("\n\nIT READ PROPERLY
-    
+    int blockArray[BUFSIZ] = {0};
+    int arrayIndex = 0;
+    for (uint32_t m = 0; m < POINTERS_PER_INODE; m++){
+        if (block.inodes[inode_number].direct[m]>0){
+            blockArray[arrayIndex++] = (int)block.inodes[inode_number].direct[m];
+        }
+    }
+    Block block3;
+    if(disk_read(fs->disk,block.inodes[inode_number].indirect,block3.data)==BLOCK_SIZE){
+        for (uint32_t n = 0; n < POINTERS_PER_BLOCK; n++){
+            if (block3.pointers[n]){
+                blockArray[arrayIndex++] = (int)block3.pointers[n];
+            }
+        }
+    }
+    else{
+        return -1;
+    }
+    int offnum = (int)offset/BLOCK_SIZE;
+
+    if (offnum<POINTERS_PER_INODE){
+        for (uint32_t a = 0; a < POINTERS_PER_INODE; a++){
+            Block block2;
+            if(block.inodes[inode_number].direct[a]>0){
+                if (offset+BLOCK_SIZE<=block.inodes[inode_number].size && offset+BLOCK_SIZE<=length){
+                    memcpy(block2.data+offset,data,BLOCK_SIZE);
+                    disk_write(fs->disk,blockArray[offnum],block2.data);
+                    return BLOCK_SIZE;
+                }
+                else{
+                    memcpy(block2.data+offset,data,block.inodes[inode_number].size-offset);
+                    disk_write(fs->disk,blockArray[offnum],block2.data);
+                    return block.inodes[inode_number].size-offset;
+                }
+            }
+            else{
+                for (uint32_t b = 0; b < fs->meta_data.blocks; b++){
+                    if(fs->free_blocks[b]){
+                        block.inodes[inode_number].direct[a] = b;
+                        fs->free_blocks[b] = true;
+                    }
+                }
+                if (offset+BLOCK_SIZE<=block.inodes[inode_number].size && offset+BLOCK_SIZE<=length){
+                    memcpy(block2.data+offset,data,BLOCK_SIZE);
+                    disk_write(fs->disk,blockArray[offnum],block2.data);
+                    return BLOCK_SIZE;
+                }
+                else{
+                    memcpy(block2.data+offset,data,block.inodes[inode_number].size-offset);
+                    disk_write(fs->disk,blockArray[offnum],block2.data);
+                    return block.inodes[inode_number].size-offset;
+                }
+            }
+        }
+    }
+    else{
+        Block block4;
+        if (disk_read(fs->disk,block.inodes[inode_number].indirect,block4.data)==DISK_FAILURE){
+            return -1;
+        }
+        for (uint32_t c = 0; c < POINTERS_PER_BLOCK; c++){
+            if(block4.pointers[c]>0){
+                if (offset+BLOCK_SIZE<=block.inodes[inode_number].size && offset+BLOCK_SIZE<=length){
+                    memcpy(block4.data+offset,data,BLOCK_SIZE);
+                    disk_write(fs->disk,blockArray[offnum],block4.data);
+                    return BLOCK_SIZE;
+                }
+                else{
+                    memcpy(block4.data+offset,data,block.inodes[inode_number].size-offset);
+                    disk_write(fs->disk,blockArray[offnum],block4.data);
+                    return block.inodes[inode_number].size-offset;
+                }
+            }
+            else{
+                for (uint32_t d = 0; d < fs->meta_data.blocks; d++){
+                    if(fs->free_blocks[d]){
+                        block4.pointers[c] = d;
+                        fs->free_blocks[d] = true;
+                    }
+                }
+                if (offset+BLOCK_SIZE<=block.inodes[inode_number].size && offset+BLOCK_SIZE<=length){
+                    memcpy(block4.data+offset,data,BLOCK_SIZE);
+                    disk_write(fs->disk,blockArray[offnum],block4.data);
+                    return BLOCK_SIZE;
+                }
+                else{
+                    memcpy(block4.data+offset,data,block.inodes[inode_number].size-offset);
+                    disk_write(fs->disk,blockArray[offnum],block4.data);
+                    return block.inodes[inode_number].size-offset;
+                }
+            }
+        }
+    }
 
     return -1;
 
