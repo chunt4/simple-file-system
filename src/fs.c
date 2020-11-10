@@ -398,51 +398,59 @@ ssize_t fs_read(FileSystem *fs, size_t inode_number, char *data, size_t length, 
     if (offset>=length || offset>=block.inodes[inode_number].size){
         return -1;
     }
+    ssize_t bytesread = 0;
     //printf("\n\nIT READ PROPERLY\n\n");
     //printf("\n\nSIZE OF FILE: %u\n\n",block.inodes[inode_number].size);
     if (block.inodes[inode_number].valid==1){
-        for (uint32_t m = 0; m < POINTERS_PER_INODE; m++){
+        for (uint32_t m = offset/BLOCK_SIZE; m < POINTERS_PER_INODE; m++){
             if (block.inodes[inode_number].direct[m]>0){
-                if ((int)offset/BLOCK_SIZE==m){
-                    Block block2;
-                    printf("\n\nDIRECT BLOCK: %u\n\n",block.inodes[inode_number].direct[m]);
-                    if (disk_read(fs->disk,block.inodes[inode_number].direct[m],block2.data)==DISK_FAILURE){
-                        return -1;
+                Block block2;
+                printf("\n\nDIRECT BLOCK: %u\n\n",block.inodes[inode_number].direct[m]);
+                if (disk_read(fs->disk,block.inodes[inode_number].direct[m],block2.data)==DISK_FAILURE){
+                    return -1;
+                }
+                else{
+                    printf("\n\n BYTES READ: %zu\n\n",bytesread);
+                    if (bytesread+BLOCK_SIZE<=block.inodes[inode_number].size && bytesread+BLOCK_SIZE<=length){
+                        //printf("\n\nFIRST MEMCPY\n\n");
+                        memcpy(data+bytesread,block2.data,BLOCK_SIZE);
+                        bytesread += BLOCK_SIZE;
+                    }
+                    else if (bytesread+BLOCK_SIZE>block.inodes[inode_number].size){
+                        //printf("\n\nHIT MEMCPY DIRECT\n\n");
+                        memcpy(data+bytesread,block2.data,block.inodes[inode_number].size-bytesread);
+                        bytesread += block.inodes[inode_number].size-bytesread;
+                        return bytesread;
                     }
                     else{
-                        if (offset+BLOCK_SIZE<=block.inodes[inode_number].size && offset+BLOCK_SIZE<=length){
-                            memcpy(data+offset,block2.data,BLOCK_SIZE);
-                            return BLOCK_SIZE;
-                        }
-                        else{
-                            memcpy(data+offset,block2.data,block.inodes[inode_number].size-offset);
-                            return block.inodes[inode_number].size-offset;
-                        }
+                        return bytesread;
                     }
                 }
             }
         }
         Block block3;
         if(disk_read(fs->disk,block.inodes[inode_number].indirect,block3.data)==BLOCK_SIZE){
-            for (uint32_t n = 0; n < POINTERS_PER_BLOCK; n++){
+            for (uint32_t n = offset/BLOCK_SIZE; n < POINTERS_PER_BLOCK; n++){
                 if (block3.pointers[n]){
                     Block block4;
-                    if ((int)offset/BLOCK_SIZE==n+POINTERS_PER_INODE){
-                        printf("\n\nINDIRECT BLOCK: %u\n\n",block3.pointers[n]);
-
-                        if (disk_read(fs->disk,block3.pointers[n],block4.data)==DISK_FAILURE){
-                            return -1;
+                    printf("\n\nINDIRECT BLOCK: %u\n\n",block3.pointers[n]);
+                    if (disk_read(fs->disk,block3.pointers[n],block4.data)==DISK_FAILURE){
+                        return -1;
+                    }
+                    else{
+                        printf("\n\n BYTES READ: %zu\n\n",bytesread);
+                        if (bytesread+BLOCK_SIZE<=block.inodes[inode_number].size && bytesread+BLOCK_SIZE<=length){
+                            //printf("\n\nFIRST MEMCPY\n\n");
+                            memcpy(data+bytesread,block4.data,BLOCK_SIZE);
+                            bytesread += BLOCK_SIZE;
+                        }
+                        else if (bytesread+BLOCK_SIZE>block.inodes[inode_number].size){
+                            memcpy(data+bytesread,block4.data,block.inodes[inode_number].size-bytesread);
+                            bytesread += block.inodes[inode_number].size-bytesread;
+                            return bytesread;
                         }
                         else{
-                            if (offset+BLOCK_SIZE<=block.inodes[inode_number].size && offset+BLOCK_SIZE<=length){
-                                memcpy(data+offset,block4.data,BLOCK_SIZE);
-                                return BLOCK_SIZE;
-                            }
-                            else{
-                                memcpy(data+offset,block4.data,block.inodes[inode_number].size-offset);
-                                return block.inodes[inode_number].size-offset;
-                            }
-
+                            return bytesread;
                         }
                     }
                 }
