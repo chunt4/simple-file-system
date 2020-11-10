@@ -384,32 +384,67 @@ ssize_t fs_stat(FileSystem *fs, size_t inode_number) {
  * @return      Number of bytes read (-1 on error).
  **/
 ssize_t fs_read(FileSystem *fs, size_t inode_number, char *data, size_t length, size_t offset) {
+    //printf("\n\nENTERED READ\n\n");
     Block block;
     size_t inode_block = (size_t)((int)(inode_number/INODES_PER_BLOCK)+1);
-    printf("\n\nINODE BLOCK: %i\n\n", inode_block);
-    if (disk_read(fs->disk,inode_block,block.data)==DISK_FAILURE){
-        printf("\n\nSTILL NOT READING\n\n");
+    if (inode_block>fs->meta_data.inode_blocks){
         return -1;
     }
-    printf("\n\nIT READ PROPERLY\n\n");
+    //printf("\n\nINODE BLOCK: %u\n\n", inode_block);
+    if (disk_read(fs->disk,inode_block,block.data)==DISK_FAILURE){
+        //printf("\n\nSTILL NOT READING\n\n");
+        return -1;
+    }
+    if (offset>=length){
+        return -1;
+    }
+    //printf("\n\nIT READ PROPERLY\n\n");
+    //printf("\n\nSIZE OF FILE: %u\n\n",block.inodes[inode_number].size);
     if (block.inodes[inode_number].valid==1){
-        //printf("\n\nIT IS VALID\n\n");
-        //return length of the file
-        //if file is 100 and block is 4K, return 100
-        //if file is 5000 and block is 4K, return 5000 for first
-        //read and 5000 - 4K for sequential reads
-        //inodeSize - 8000 for example
-        //length - 2000
-        //offset - 4000
-        //it would read 4000 - 6000 and then 6000 - 8000
-        //ssize_t inodeSize = fs_stat(fs, inode_number);
-        if (length <= BLOCK_SIZE){
-            return read(block.data[offset],data,length);            
+        int blockArray[BUFSIZ] = {0};
+        int arrayIndex = 0;
+        for (uint32_t m = 0; m < POINTERS_PER_INODE; m++){
+            if (block.inodes[inode_number].direct[m]>0){
+                blockArray[arrayIndex++] = (int)block.inodes[inode_number].direct[m];
+            }
+        }
+        Block block3;
+        if(disk_read(fs->disk,block.inodes[inode_number].indirect,block3.data)==BLOCK_SIZE){
+            for (uint32_t n = 0; n < POINTERS_PER_BLOCK; n++){
+                if (block3.pointers[n]){
+                    blockArray[arrayIndex++] = (int)block3.pointers[n];
+                }
+            }
         }
         else{
-            return read(block.data[offset],data,length-BLOCK_SIZE);
+            return -1;
+        }
+        /*if(offset==block.inodes[inode_number].size){
+            memcpy(data,blo,length-offset);
+        }*/
+        int offnum = (int)offset/BLOCK_SIZE;
+        //printf("\n\nOFFSET: %zu\n\n",offset);
+        //printf("\n\n WE BACK IN DIS BIH: %i\n\n", offnum);
+        //printf("\n\nBLOCK NUM: %i\n\n",blockArray[offnum]);
+        Block block2;
+        if(disk_read(fs->disk,(size_t)blockArray[offnum],block2.data)==BLOCK_SIZE){
+            //printf("\n\n HELLO: %u \n\n",offset+BLOCK_SIZE);
+            if (offset+BLOCK_SIZE<=block.inodes[inode_number].size && offset+BLOCK_SIZE<=length){
+                memcpy(data,block2.data+offset,BLOCK_SIZE);
+                return BLOCK_SIZE;
+            }
+            else if (offset+BLOCK_SIZE>block.inodes[inode_number].size){
+                //printf("\n\nHIT MEMCPY\n\n");
+                memcpy(data,block2.data+offset,block.inodes[inode_number].size-offset);
+                return block.inodes[inode_number].size-offset;
+            }
+            //printf("\n\nRETURNED AND SET TO TRUE: %zu\n\n",filecount);
+        }
+        else{
+            return -1;
         }
     }
+
     return -1;
 }
 
@@ -433,28 +468,20 @@ ssize_t fs_read(FileSystem *fs, size_t inode_number, char *data, size_t length, 
 ssize_t fs_write(FileSystem *fs, size_t inode_number, char *data, size_t length, size_t offset) {
     Block block;
     size_t inode_block = (size_t)((int)(inode_number/INODES_PER_BLOCK)+1);
-    if (disk_read(fs->disk,inode_block,block.data)==DISK_FAILURE){
+    if (inode_block>fs->meta_data.inode_blocks){
         return -1;
     }
-    if (block.inodes[inode_number].valid==1){
-        //return length of the file
-        //if file is 100 and block is 4K, return 100
-        //if file is 5000 and block is 4K, return 5000 for first
-        //read and 5000 - 4K for sequential reads
-        //inodeSize - 8000 for example
-        //length - 2000
-        //offset - 4000
-        //it would read 4000 - 6000 and then 6000 - 8000
-        //ssize_t inodeSize = fs_stat(fs, inode_number);
-        if (length <= BLOCK_SIZE){
-            return (write(block.data[offset],data,length));
-            //disk_write(fs->disk,inode_block,block.data);
-            //return length;
-        }
-        else{
-            return fs_write(fs,inode_number,data,length-BLOCK_SIZE,offset);
-        }
+    //printf("\n\nINODE BLOCK: %u\n\n", inode_block);
+    if (disk_read(fs->disk,inode_block,block.data)==DISK_FAILURE){
+        //printf("\n\nSTILL NOT READING\n\n");
+        return -1;
     }
+    if (offset>=length){
+        return -1;
+    }
+    //printf("\n\nIT READ PROPERLY
+    
+
     return -1;
 
 }
