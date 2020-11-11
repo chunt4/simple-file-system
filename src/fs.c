@@ -501,16 +501,69 @@ ssize_t fs_write(FileSystem *fs, size_t inode_number, char *data, size_t length,
     if (inode_block>fs->meta_data.inode_blocks){
         return -1;
     }
+
+    // Loads the inode block data into block.data
     if(disk_read(fs->disk,inode_block,block.data)==DISK_FAILURE){
         return -1;
     }
     ssize_t bytewrite = 0;
 
+    // Case where everything can fit on one inode
+    if (block.inodes[inode_number].size >= length){
+        if (block.inodes[inode_number].valid != 1){
+            return -1;
+        }
+        for (uint32_t m = offset/BLOCK_SIZE; m < POINTERS_PER_INODE; m++){
+            if (block.inodes[inode_number].direct[m] > 0){
+                Block block2;       // Direct Block
+                if (disk_read(fs->disk,block.inodes[inode_number].direct[m],block2.data) == DISK_FAILURE){
+                    return -1;
+                }
+                else{
+                    if (bytewrite + BLOCK_SIZE <= length){
+                        memcpy(block2.data, data+bytewrite, BLOCK_SIZE);
+                        bytewrite += BLOCK_SIZE;
+                        disk_write(fs->disk, block.inodes[inode_number].direct[m], block2.data);
+                    }
+                    else if (bytewrite + BLOCK_SIZE > block.inodes[inode_number].size){
+                        memcpy(block2.data, data+bytewrite, block.inodes[inode_number].size-bytewrite);
+                        bytewrite += (block.inodes[inode_number].size - bytewrite);
+                        disk_write(fs->disk, block.inodes[inode_number].direct[m], block2.data);
+                        return bytewrite;
+                    }
+                    else{
+                        return bytewrite;
+                    }   
+                }
+            }
+            else{
+                return -1;
+            }
+        } 
+        Block block3;
+        if (disk_read(fs->disk, block.inodes[inode_number].indirect, block3.data) == DISK_FAILURE){
+            return -1;
+        }
+        else{
+            uint32_t offnum = offset/BLOCK_SIZE;
+            if (offnum!=0){
+                offnum -= POINTERS_PER_INODE;
+            }
+            for (uint32_t n = offnum; n < POINTERS_PER_BLOCK; n++){
+                if (block3.pointers[n]){
+
+                }
+            }
+        }
+    }
+
+    // Case where more space must be allocated
+//    else{}
+
     if(disk_write(fs->disk,inode_block,block.data)==DISK_FAILURE){
         return -1;
     }
     return bytewrite;
-    return -1;
 }
 
 /* vim: set expandtab sts=4 sw=4 ts=8 ft=c: */
