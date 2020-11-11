@@ -15,7 +15,7 @@ https://youtu.be/IUxRBLnAv1k
 ## Errata
 
 > Describe any known errors, bugs, or deviations from the requirements.
-Errata is discussed heavily in the project video
+Errata is discussed heavily in the project video :)
 
 [Project 04]:       https://www3.nd.edu/~pbui/teaching/cse.30341.fa20/project04.html
 [CSE.30341.FA20]:   https://www3.nd.edu/~pbui/teaching/cse.30341.fa20/
