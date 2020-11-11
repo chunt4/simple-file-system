@@ -507,12 +507,14 @@ ssize_t fs_write(FileSystem *fs, size_t inode_number, char *data, size_t length,
         return -1;
     }
     ssize_t bytewrite = 0;
-
+    //printf("\n\nENTERING THE MATRIX\n\n");
     // Case where everything can fit on one inode
     if (block.inodes[inode_number].size >= length){
+        //printf("\n\nYES\n\n");
         if (block.inodes[inode_number].valid != 1){
             return -1;
         }
+        //printf("\n\nPASSES VALID\n\n");
         for (uint32_t m = offset/BLOCK_SIZE; m < POINTERS_PER_INODE; m++){
             if (block.inodes[inode_number].direct[m] > 0){
                 Block block2;       // Direct Block
@@ -520,6 +522,7 @@ ssize_t fs_write(FileSystem *fs, size_t inode_number, char *data, size_t length,
                     return -1;
                 }
                 else{
+                    //printf("\n\nDIRECT BLOCK: %i\n\n",block.inodes[inode_number].direct[m]);
                     if (bytewrite + BLOCK_SIZE <= length){
                         memcpy(block2.data, data+bytewrite, BLOCK_SIZE);
                         bytewrite += BLOCK_SIZE;
@@ -558,7 +561,120 @@ ssize_t fs_write(FileSystem *fs, size_t inode_number, char *data, size_t length,
     }
 
     // Case where more space must be allocated
-//    else{}
+    else{
+        //printf("\n\nAYO WHADDUP\n\n");
+        if (block.inodes[inode_number].valid != 1){
+            return -1;
+        }
+        int numBlockToAllocate = ((int)((offset+length-block.inodes[inode_number].size)/BLOCK_SIZE)+1);
+        //printf("\n\nNUM: %i\n\n",numBlockToAllocate);
+        int counter = 0;
+
+loop:
+        for (int f = counter; f < numBlockToAllocate; f++){
+            for (uint32_t g = 0; g < fs->meta_data.blocks; g++){
+                if(fs->free_blocks[g]){
+                    fs->free_blocks[g] = false;
+                    for (uint32_t m = 0; m < POINTERS_PER_INODE; m++){
+                        if(!block.inodes[inode_number].direct[m]){
+                            block.inodes[inode_number].direct[m] = g;
+                            counter++;
+                            goto loop;
+                        }
+                    }
+                    //printf("\n\n YEYEAHHHAHAHAHHA \n\n");
+                    Block block2;
+                    if (disk_read(fs->disk,block.inodes[inode_number].indirect,block2.data)==DISK_FAILURE){
+                        return -1;
+                    }
+                    for (uint32_t n = 0; n < POINTERS_PER_BLOCK; n++){
+                        if(!block2.pointers[n]){
+                            block2.pointers[n] = g;
+                            counter++;
+                            goto loop;
+                        }
+                    }
+                }
+            }
+        }
+        for (uint32_t m = offset/BLOCK_SIZE; m < POINTERS_PER_INODE; m++){
+            if (block.inodes[inode_number].direct[m] > 0){
+                Block block2;       // Direct Block
+                if (disk_read(fs->disk,block.inodes[inode_number].direct[m],block2.data) == DISK_FAILURE){
+                    return -1;
+                }
+                else{
+                    //printf("\n\nDIRECT BLOCK: %i\n\n",block.inodes[inode_number].direct[m]);
+                    if (bytewrite + BLOCK_SIZE <= length){
+                        //printf("\n\nWHAT\n\n");
+                        memcpy(block2.data, data+bytewrite, BLOCK_SIZE);
+                        bytewrite += BLOCK_SIZE;
+                        block.inodes[inode_number].size += BLOCK_SIZE;
+                        disk_write(fs->disk, block.inodes[inode_number].direct[m], block2.data);
+                        disk_write(fs->disk, inode_block, block.data);
+                    }
+                    else if (bytewrite + BLOCK_SIZE > length){
+                        //printf("\n\nIf this prints that'd be fucking sick: %zu\n\n",length);
+                        memcpy(block2.data, data+bytewrite, length-bytewrite);
+                        bytewrite += (length - bytewrite);
+                        block.inodes[inode_number].size += bytewrite;
+                        disk_write(fs->disk, block.inodes[inode_number].direct[m], block2.data);
+                        disk_write(fs->disk, inode_block, block.data);
+                        return bytewrite;
+                    }
+                    else{
+                        return bytewrite;
+                    }   
+                }
+            }
+            else{
+                return -1;
+            }
+        } 
+        Block block3;
+        uint32_t offnum = offset/BLOCK_SIZE;
+        if (offnum!=0){
+            offnum -= POINTERS_PER_INODE;
+        }
+        if(disk_read(fs->disk,block.inodes[inode_number].indirect,block3.data)==BLOCK_SIZE){
+            for (uint32_t n = offnum; n < POINTERS_PER_BLOCK; n++){
+                if (block3.pointers[n]){
+                    Block block4;
+                    //printf("\n\nINDIRECT BLOCK: %u\n\n",block3.pointers[n]);
+                    if (disk_read(fs->disk,block3.pointers[n],block4.data)==DISK_FAILURE){
+                        return -1;
+                    }
+                    else{
+                        //printf("\n\nDIRECT BLOCK: %i\n\n",block.inodes[inode_number].direct[m]);
+                        if (bytewrite + BLOCK_SIZE <= length){
+                            //printf("\n\nWHAT\n\n");
+                            memcpy(block4.data, data+bytewrite, BLOCK_SIZE);
+                            bytewrite += BLOCK_SIZE;
+                            disk_write(fs->disk, block3.pointers[n], block4.data);
+                            disk_write(fs->disk, inode_block, block3.data);
+                        }
+                        else if (bytewrite + BLOCK_SIZE > length){
+                            //printf("\n\nIf this prints that'd be fucking sick: %zu\n\n",length);
+                            memcpy(block4.data, data+bytewrite, length-bytewrite);
+                            bytewrite += (length - bytewrite);
+                            block.inodes[inode_number].size += bytewrite;
+                            disk_write(fs->disk, block3.pointers[n], block4.data);
+                            disk_write(fs->disk, inode_block, block3.data);
+                            return bytewrite;
+                        }
+                        else{
+                            return bytewrite;
+                        }   
+                        //printf("\n\n BYTES READ: %zu\n\n",bytesread);
+                    }
+                }
+                else{
+                    return block.inodes[inode_number].size-offset;
+                }
+            }
+        }
+
+    }
 
     if(disk_write(fs->disk,inode_block,block.data)==DISK_FAILURE){
         return -1;
