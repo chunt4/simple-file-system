@@ -5,8 +5,8 @@ This is [Project 04] of [CSE.30341.FA20].
 
 ## Students
 
-1. Domer McDomerson (dmcdomer@nd.edu)
-2. Belle Fleur (bfleur@nd.edu)
+1. Chris Hunt (chunt4@nd.edu)
+2. Jake Hracho (jhracho@nd.edu)
 
 ## Demonstration
 https://youtu.be/IUxRBLnAv1k
